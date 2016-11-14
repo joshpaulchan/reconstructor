@@ -70,11 +70,11 @@ def reconstruct(object_images, ref_images=None):
 
     log(" image IP detection and matching ".center(80, '='))
 
-    all_ip_kps, all_ip_desc, matching_ip = ipt.find_and_match_ip(object_images)
-    
+    all_ip_kps, all_ip_desc = ipt.find_ip(object_images)
     # restrict things a bit
     all_ip = sorted(all_ip_kps)[:50]
-    matching_ip = sorted(matching_ip)[:25]
+    
+    matching_ip, l_pts, r_pts = ipt.match_ip(all_ip_kps, all_ip_desc)
     
     # log first 20 ip
     log(matching_ip[:20])
@@ -84,11 +84,11 @@ def reconstruct(object_images, ref_images=None):
 
     log(" image IP detection and matching ".center(80, '='))
     
-    F = camera_matrix.calculate_F(all_ip[0], all_ip[1])
+    F = camera_matrix.calculate_F(l_pts, r_pts)
     cam_mat = camera_matrix.fromF(F)
     if ki is not None:
         # Find essential matrix
-        E = ki.T @ F @ ki
+        E = ki.T * F * ki
         cam_mat = camera_matrix.fromE(E)
         
     ############################# 3. triangulation #############################
@@ -100,14 +100,12 @@ def reconstruct(object_images, ref_images=None):
         all_ip = triangulate.from_ip(matching_ip, E=cam_mat)
 
     ########################### 4. bundle adjustment ###########################
-    # ayyyyy lmao
 
     # all_ip = all_ip
 
     ########################### 5. 3D reconstruction ###########################
     # Produce a sparse point cloud of the object and images
     plot_3d(all_ip)
-
 
 def main():
     is_test = True
