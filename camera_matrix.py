@@ -10,13 +10,13 @@ def calculate_F(l_pts, r_pts):
     images.
     """
     # compute A from interest points
-    A = np.empty()
-    for i, pts in enumerate(all_ip):
+    A = np.empty([len(l_pts), len(l_pts[0])])
+    for l_pt, r_pt in zip(l_pts, r_pts):
         # 3x3 matrix
-        tt = l_pts[i,:].T * r_pts[i,:]
+        tt = l_pt.T * r_pt
         
         # form the matrix for Aq = 0, where q is 9x1 the elements of F
-        A.set(i, [tt[1,:], tt[2,:], tt[3,:]])
+        A.append([tt[1,:], tt[2,:], tt[3,:]])
     
     # compute F from A
     _, _, V = np.linalg.svd(A)
@@ -51,9 +51,9 @@ def fromE(E):
     U, S, V = np.linalg.svd(E)
 
     # solve for S, R, t
-    S = U @ Z @ U.T
-    R = U @ W @ V.T
-    Ro = U @ W.T @ V.T
+    S = U * Z * U.T
+    R = U * W * V.T
+    Ro = U * W.T * V.T
     t = U[:, 3]
 
     # 4 choices
@@ -73,6 +73,6 @@ def fromF(F):
     e = V[:, 3]
 
     ex = np.cross(e.reshape(1, 3), np.eye(3, 3))
-    exf = ex @ F
+    exf = ex * F
     P = np.array([ exf, e ])
     return P
