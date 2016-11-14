@@ -8,6 +8,12 @@ from util import log
 
 sift = cv2.xfeatures2d.SIFT_create() # pylint: disable=no-member
 bf = cv2.BFMatcher() # pylint: disable=no-member
+# FLANN parameters
+FLANN_INDEX_KDTREE = 0
+
+index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+search_params = dict(checks=50)
+flann = cv2.FlannBasedMatcher(index_params, search_params) # pylint: disable=no-member
 
 ############################ FINDING AND DETECTION ############################
 
@@ -53,46 +59,71 @@ def find_and_match_ip(images, method=None):
     Uses
     """
     all_ip_kp, all_ip_des = find_ip(images, method)
-    return all_ip_kp, all_ip_des, match_ip(all_ip_des)
+    return all_ip_kp, all_ip_des, match_ip(all_ip_kp, all_ip_des)
 
 ################################### MATCHING ###################################
 
-def _match_ip_via_BF(ip_des):
+def _match_ip_via_BF(all_ip_kps, all_ip_des):
     """
-    Matches IP (follows an IP through the frames) using a B
+    Matches IP (follows an IP through the frames) using a Brutge Force Matcher.
     
-    @param  : ip_des    : iterable  : list of lists of the ip_descriptors in 
-    each image
-    @return : list      : 
+    @param  : all_ip_kps    : iterable  : list of lists of the locaitons of ips 
+    in each image
+    @param  : all_ip_des    : iterable  : list of lists of the ip_descriptors 
+    in each image
+    @return : list
     """
     good = []
+    l_pts = []
+    r_pts = []
+    matches = bf.knnMatch(all_ip_des[0], all_ip_des[0], k=2)
     
-    first_image_ip_descriptors = ip_des[0]
+    # Apply ratio test
+    for m, n in matches:
+        if m.distance < 0.75 * n.distance:
+            good.append([m])
+            r_pts.append(all_ip_kps[0][m.trainIdx].pt)
+            l_pts.append(all_ip_kps[1][m.queryIdx].pt)
     
-    for ip_descriptors in ip_des[1:]:
-        matches = bf.knnMatch(first_image_ip_descriptors, ip_descriptors, k=2)
-        
-        # Apply ratio test
-        for m, n in matches:
-            if m.distance < 0.75 * n.distance:
-                good.append([m])
-    
-    return good
+    return good, l_pts, r_pts
 
-def _match_ip_via_FLANN_(matches):
+def _match_ip_via_FLANN_(all_ip_kps, all_ip_desc):
+    """
+    Matches IP (follows an IP through the frames) using a FLANN Matcher.
+    
+    @param  : all_ip_kps    : iterable  : list of lists of the locaitons of ips 
+    in each image
+    @param  : all_ip_des    : iterable  : list of lists of the ip_descriptors 
+    in each image
+    each image
+    @return : list
+    """
     good = []
-    pts1 = []
-    pts2 = []
+    l_pts = []
+    r_pts = []
+    matches = flann.knnMatch(all_ip_desc[0], all_ip_desc[1], k=2)
 
     # ratio test as per Lowe's paper
-    for i,(m,n) in enumerate(matches):
+    for _, (m,n) in enumerate(matches):
         if m.distance < 0.8*n.distance:
             good.append(m)
-            pts2.append(kp2[m.trainIdx].pt)
-            pts1.append(kp1[m.queryIdx].pt)
+            r_pts.append(all_ip_kps[0][m.trainIdx].pt)
+            l_pts.append(all_ip_kps[1][m.queryIdx].pt)
+        
+    # cv2.drawMatchesKnn expects list of lists as matches
+    # img3 = cv2.drawMatchesKnn(
+    #     im0,
+    #     all_ip_kps[0],
+    #     im1,
+    #     all_ip_kps[1],
+    #     matching_ip[:10],
+    #     None,
+    #     flags=2)
+    
+    return good, l_pts, r_pts
 
-def match_ip(ips):
-    pass
+def match_ip(all_kps, all_descs, method='BF'):
+    return _match_ip_via_BF(all_kps, all_descs) if method == 'BF' else _match_ip_via_FLANN_(all_kps, all_descs)
 
 def main():
     # pylint: disable=no-member
@@ -104,25 +135,7 @@ def main():
     
     images = glob.glob("images/object/*.JPG")[:10]
     all_ip_kps, all_ip_des = find_ip(images)
-    matching_ip = match_ip(all_ip_des)
-    
-    im0 = cv2.imread(images[0])
-    im1 = cv2.imread(images[1])
-   
-    # cv2.drawMatchesKnn expects list of lists as matches
-    img3 = cv2.drawMatchesKnn(
-        im0,
-        all_ip_kps[0],
-        im1,
-        all_ip_kps[1],
-        matching_ip[:10],
-        None,
-        flags=2)
-    
-    plt.imshow(img3)
-    plt.show()
-    
-    cv2.waitkeyPress()
+    matching_ip = match_ip(all_ip_kps, all_ip_des)
 
 if __name__ == '__main__':
     main()
